@@ -95,10 +95,44 @@ if ($extracted.Count -eq 0) {
 Write-Host ''
 $installLog = Join-Path $ExtractDir 'install.log'
 $proc2 = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/i', ('"' + $Msi + '"'), '/qn', '/l*v', ('"' + $installLog + '"')) -Wait -PassThru
-Write-Host ('msiexec /i 退出码：' + $proc2.ExitCode + '（非提权下预期 1603/1925，而不是解析类错误）')
+
+if ($proc2.ExitCode -eq 0) {
+    # 管理员环境（如 CI）：真的装上了，做一次端到端验证后再卸掉，保持机器干净
+    Write-Host 'msiexec /i 退出码：0（已实际安装，做端到端验证）'
+    $installedDir = Join-Path $env:ProgramFiles 'WindowsBaselineTestSimulator'
+
+    foreach ($n in @('WindowsBaselineTestSimulator.exe', 'wbts.exe')) {
+        $exists = Test-Path (Join-Path $installedDir $n)
+        $state = '缺失!'
+        if ($exists) { $state = '存在' }
+        '  文件 {0,-34} {1}' -f $n, $state
+    }
+
+    $svc = Get-Service -Name 'WBTS' -ErrorAction SilentlyContinue
+    $svcState = '未注册!'
+    if ($svc) { $svcState = [string]$svc.Status }
+    '  服务 WBTS                        ' + $svcState
+
+    $menu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\WindowsBaselineTestSimulator'
+    $menuState = '缺失!'
+    if (Test-Path $menu) { $menuState = '已创建' }
+    '  开始菜单                         ' + $menuState
+
+    Write-Host '  卸载（msiexec /x）…'
+    $proc3 = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/x', ('"' + $Msi + '"'), '/qn') -Wait -PassThru
+    '  卸载退出码：' + $proc3.ExitCode
+
+    Start-Sleep -Seconds 2
+    $svcAfter = Get-Service -Name 'WBTS' -ErrorAction SilentlyContinue
+    $after = '无'
+    if ($svcAfter) { $after = '仍有（' + $svcAfter.Status + '）' }
+    '  卸载后服务残留：' + $after
+} else {
+    Write-Host ('msiexec /i 退出码：' + $proc2.ExitCode + '（非提权下预期 1603/1925，而不是解析类错误）')
+}
 $logText = Get-Content -Path $installLog -Raw -ErrorAction SilentlyContinue
 if ($logText) {
-    $hits = [regex]::Matches($logText, 'Error \d+:.*|已开始|Installation success|Product: .*') | Select-Object -First 8
+    $hits = [regex]::Matches($logText, 'Error \d+:.*|Installation success|Product: .*') | Select-Object -First 6
     foreach ($h in $hits) { '  ' + $h.Value.Trim() }
 }
 Write-Host ''
