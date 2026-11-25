@@ -1,4 +1,4 @@
-# 发布到 GitHub
+﻿# 发布到 GitHub
 
 本仓库的成品已经生成在 `dist\`：
 
@@ -14,6 +14,28 @@ dist\
 ```
 
 `dist\` 与 `out\` 都在 `.gitignore` 里，源码进仓库、产物挂 Release。
+
+## 0. 走本地代理（本机 nano.exe）
+
+本机 `nano.exe` 在 `127.0.0.1:65532` 同时提供 HTTP 与 SOCKS5 代理（`0.0.0.0:65532`）。
+仓库级配置（推荐，只影响本仓库）：
+
+```powershell
+git config http.proxy  http://127.0.0.1:65532
+git config https.proxy http://127.0.0.1:65532
+git config --local --get-regexp 'proxy'      # 确认
+```
+
+临时用一次：`git -c http.proxy=http://127.0.0.1:65532 push`；
+想全局生效就把 `--local` 换成 `--global`。
+验证代理是否可用：
+
+```powershell
+curl.exe -x http://127.0.0.1:65532 -sS -o NUL -w "code=%{http_code}" https://api.github.com
+```
+
+> 端口以 `Get-NetTCPConnection -State Listen | Where-Object OwningProcess -eq (Get-Process nano).Id` 为准，
+> 换网络环境或重启代理后端口可能变。
 
 ## 1. 首次推送仓库
 
