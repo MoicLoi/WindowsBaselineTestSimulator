@@ -1,0 +1,59 @@
+name: build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 环境自检
+        shell: pwsh
+        run: |
+          dotnet --version
+          $env:WINDIR
+          Test-Path (Join-Path $env:WINDIR 'System32\makecab.exe')
+
+      - name: 编译
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: 生成 MSI
+        shell: pwsh
+        run: ./packaging/New-Msi.ps1 -Version 1.0.0
+
+      - name: 校验 MSI
+        shell: pwsh
+        run: ./packaging/Test-Msi.ps1
+
+      - name: 生成发布包
+        shell: pwsh
+        run: ./packaging/New-Release.ps1 -Version 1.0.0
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowsBaselineTestSimulator-1.0.0-win-x64
+          path: |
+            dist/WindowsBaselineTestSimulator-1.0.0-win-x64.zip
+            dist/WindowsBaselineTestSimulator-1.0.0-win-x64/
+            dist/RELEASE-NOTES-v1.0.0.md
+          if-no-files-found: error
+
+      - name: 发布 Release（仅打 tag 时）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: dist/RELEASE-NOTES-v1.0.0.md
+          files: |
+            dist/WindowsBaselineTestSimulator-1.0.0-win-x64.zip
+            dist/WindowsBaselineTestSimulator-1.0.0-win-x64/SHA256SUMS.txt
